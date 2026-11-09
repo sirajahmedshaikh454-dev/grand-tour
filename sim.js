@@ -12,14 +12,16 @@ export function earthState(eph, t) {
   return { p: a, v: [(c[0] - b[0]) / 0.5, (c[1] - b[1]) / 0.5, (c[2] - b[2]) / 0.5] };
 }
 
-// Patched-conic launch: the probe leaves Earth with hyperbolic excess speed vinf (km/s), pointed `angleDeg`
-// from Earth's own direction of travel (0 = straight ahead, positive = towards the outer planets' side).
-export function launchState(eph, t, vinfKms, angleDeg) {
-  const e = earthState(eph, t), sp = Math.hypot(...e.v);
-  const ux = e.v[0] / sp, uy = e.v[1] / sp, uz = e.v[2] / sp;
+// Patched-conic launch: the probe leaves Earth with hyperbolic excess speed vinf (km/s).
+// angleDeg turns the departure direction left (towards the outer planets) of Earth's own motion; 0 = straight ahead.
+// pitchDeg tilts it out of the ecliptic plane (positive = north), which the outer planets' tilted orbits need.
+export function launchState(eph, t, vinfKms, angleDeg, pitchDeg = 0) {
+  const e = earthState(eph, t), h = Math.hypot(e.v[0], e.v[1]);
+  const ux = e.v[0] / h, uy = e.v[1] / h;
   const a = angleDeg * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
+  const q = pitchDeg * Math.PI / 180, cq = Math.cos(q), sq = Math.sin(q);
   const k = vinfKms * KMS;
-  return { t, p: e.p, v: [e.v[0] + (ux * c - uy * s) * k, e.v[1] + (ux * s + uy * c) * k, e.v[2] + uz * k] };
+  return { t, p: e.p, v: [e.v[0] + (ux * c - uy * s) * cq * k, e.v[1] + (ux * s + uy * c) * cq * k, e.v[2] + sq * k] };
 }
 
 export const speedKms = v => Math.hypot(v[0], v[1], v[2]) / KMS;
