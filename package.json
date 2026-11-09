@@ -1,0 +1,15 @@
+{
+  "name": "grand-tour",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Plan a Voyager-style gravity-assist mission through the real planets of any date.",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "astronomy-engine": "^2.1.19"
+  }
+}
