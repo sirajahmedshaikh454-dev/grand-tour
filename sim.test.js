@@ -90,3 +90,18 @@ test('launching from Earth is not reported as an Earth flyby', () => {
   const r = simulate(eph, launchState(eph, t, 10.2, 8), { days: 365 * 3 });
   assert.equal(r.events.filter(e => e.type === 'flyby' && e.body === 'earth').length, 0);
 });
+
+test('a sideways burn is exactly as big as asked and exactly at right angles to the motion', () => {
+  const t = dateToDays(new Date(Date.UTC(2005, 0, 1)));
+  const start = launchState(eph, t, 10, 20, 5);
+  const days = 50.0001;
+  const base = simulate(eph, start, { days, planets: false });
+  for (const [pro, norm] of [[0, 500], [300, 0], [200, -400]]) {
+    const burnt = simulate(eph, start, { days, planets: false, burns: [{ t: t + 50, pro, norm }] });
+    const d = [0, 1, 2].map(i => burnt.final.v[i] - base.final.v[i]);
+    assert.ok(Math.abs(Math.hypot(...d) / KMS * 1000 - Math.hypot(pro, norm)) < 1, `size for ${pro}/${norm}`);
+    const v = base.final.v, vm = Math.hypot(...v);
+    const along = (d[0] * v[0] + d[1] * v[1] + d[2] * v[2]) / vm / KMS * 1000;
+    assert.ok(Math.abs(along - pro) < 2, `along-track part ${along} vs ${pro}`);
+  }
+});

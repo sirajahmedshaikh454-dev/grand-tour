@@ -82,9 +82,10 @@ export function simulate(eph, start, o = {}) {
     t += dt; bp.set(bp2);
 
     if (bi < burns.length && t >= burns[bi].t - 1e-9) {          // mid-course correction
-      const b = burns[bi++], s = Math.hypot(v[0], v[1]) || 1, k = 1e-3 * KMS;
-      const ux = v[0] / (Math.hypot(...v) || 1), uy = v[1] / (Math.hypot(...v) || 1), uz = v[2] / (Math.hypot(...v) || 1);
-      v[0] += (b.pro * ux + b.norm * (-v[1] / s)) * k; v[1] += (b.pro * uy + b.norm * (v[0] / s)) * k; v[2] += b.pro * uz * k;
+      const b = burns[bi++], speed = Math.hypot(v[0], v[1], v[2]) || 1, s = Math.hypot(v[0], v[1]) || 1, k = 1e-3 * KMS;
+      // work out the whole kick from the velocity BEFORE changing any component
+      const dvx = (b.pro * v[0] / speed + b.norm * (-v[1] / s)) * k, dvy = (b.pro * v[1] / speed + b.norm * (v[0] / s)) * k, dvz = b.pro * v[2] / speed * k;
+      v[0] += dvx; v[1] += dvy; v[2] += dvz;
       events.push({ type: 'burn', t, pro: b.pro, norm: b.norm });
     }
 
