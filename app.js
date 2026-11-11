@@ -1,5 +1,5 @@
 import { createEphemeris, BODIES, dateToDays, daysToDate, AU_KM } from './ephem.js';
-import { simulate, launchState, KMS } from './sim.js';
+import { simulate, launchState, visits, REACH, KMS } from './sim.js';
 import { autoAim } from './solve.js';
 import { PRESETS } from './presets.js';
 
@@ -7,7 +7,6 @@ const $ = id => document.getElementById(id);
 if (!window.Astronomy) { $('loading').textContent = 'The planet library failed to load.'; throw new Error('Astronomy library missing'); }
 const eph = createEphemeris(window.Astronomy);
 
-const REACH = { mercury: 0.02, venus: 0.02, earth: 0.02, mars: 0.02, jupiter: 0.1, saturn: 0.1, uranus: 0.08, neptune: 0.08 };
 const ORBIT_A = [0.387, 0.723, 1.0, 1.524, 5.203, 9.537, 19.19, 30.07];
 const GIANTS = ['jupiter', 'saturn', 'uranus', 'neptune'];
 const NAME = Object.fromEntries(BODIES.map(b => [b.id, b.name]));
@@ -28,7 +27,8 @@ function field(parent, o, list = refreshers) {
   const rng = el('input'); rng.type = 'range'; rng.min = o.min; rng.max = o.max; rng.step = o.step; rng.setAttribute('aria-label', o.label);
   const digits = o.digits ?? 3;
   const show = () => { const v = o.get(); num.value = +v.toFixed(digits); rng.value = v; };
-  num.addEventListener('input', () => { const v = parseFloat(num.value); if (Number.isFinite(v)) { o.set(Math.min(o.max, Math.max(o.min, v))); rng.value = o.get(); changed(); } });
+  num.addEventListener('input', () => { const v = parseFloat(num.value); if (Number.isFinite(v)) { o.set(Math.min(o.max, Math.max(o.min, v))); rng.value = o.get(); changed(200); } });
+  num.addEventListener('change', show);   // after typing, rewrite the box with the value actually used
   rng.addEventListener('input', () => { o.set(parseFloat(rng.value)); num.value = +o.get().toFixed(digits); changed(); });
   wrap.append(lab, num, rng); parent.append(wrap); list.push(show); show();
 }
@@ -38,8 +38,9 @@ function dateField(parent) {
   const wrap = el('div', undefined, 'field'), lab = el('label', 'Launch date'), inp = el('input'), rng = el('input');
   lab.htmlFor = 'launchDate'; inp.id = 'launchDate'; inp.type = 'date'; inp.min = '1960-01-01'; inp.max = '2090-12-31';
   rng.type = 'range'; rng.min = D0; rng.max = D1; rng.step = 1; rng.setAttribute('aria-label', 'Launch date');
-  const show = () => { inp.value = fmtDate(state.t0); rng.value = Math.round(state.t0); };
-  inp.addEventListener('input', () => { const t = Date.parse(inp.value + 'T12:00:00Z'); if (Number.isFinite(t)) { state.t0 = Math.min(D1, Math.max(D0, t / 864e5)); rng.value = Math.round(state.t0); changed(); } });
+  const show = () => { inp.value = fmtDate(state.t0); rng.value = Math.floor(state.t0); };
+  inp.addEventListener('input', () => { const t = Date.parse(inp.value + 'T12:00:00Z'); if (Number.isFinite(t)) { state.t0 = Math.min(D1, Math.max(D0, t / 864e5)); rng.value = Math.floor(state.t0); changed(200); } });
+  inp.addEventListener('change', show);
   rng.addEventListener('input', () => { state.t0 = parseFloat(rng.value) + 0.5; inp.value = fmtDate(state.t0); changed(); });
   wrap.append(lab, inp, rng); parent.append(wrap); refreshers.push(show); show();
 }
@@ -64,7 +65,7 @@ function renderBurns() {
     box.append(row);
   });
   $('addBurn').disabled = state.burns.length >= 3;
-  $('dvTotal').textContent = state.burns.length ? 'total ' + state.burns.reduce((s, b) => s + Math.hypot(b.pro, b.norm), 0).toFixed(1) + ' m/s' : '';
+  $('dvTotal').textContent = dvText();
 }
 $('addBurn').addEventListener('click', () => { if (state.burns.length < 3) { state.burns.push({ after: 90, pro: 0, norm: 0 }); renderBurns(); changed(); } });
 
@@ -81,8 +82,14 @@ for (const p of PRESETS) {
 }
 
 // ---------- simulation ----------
-let pending = false;
-function changed() { state.preset = null; document.querySelectorAll('#presets button').forEach(b => b.setAttribute('aria-pressed', 'false')); $('dvTotal').textContent = state.burns.length ? 'total ' + state.burns.reduce((s, b) => s + Math.hypot(b.pro, b.norm), 0).toFixed(1) + ' m/s' : ''; if (!pending) { pending = true; setTimeout(() => { pending = false; recompute(); }, 0); } }
+let timer = 0;
+const dvText = () => state.burns.length ? 'total ' + state.burns.reduce((s, b) => s + Math.hypot(b.pro, b.norm), 0).toFixed(1) + ' m/s' : '';
+function changed(delay = 0) {
+  state.preset = null;
+  document.querySelectorAll('#presets button').forEach(b => b.setAttribute('aria-pressed', 'false'));
+  $('dvTotal').textContent = dvText();
+  clearTimeout(timer); timer = setTimeout(recompute, delay);   // typing waits a moment; sliders recompute at once
+}
 const absBurns = () => state.burns.map(b => ({ t: state.t0 + b.after, pro: b.pro, norm: b.norm }));
 
 function recompute() {
@@ -90,7 +97,8 @@ function recompute() {
   const n = res.path.length / 4;
   speeds = new Float64Array(n);
   for (let i = 1; i < n; i++) {
-    const dt = res.path[i * 4] - res.path[(i - 1) * 4] || 1e-9;
+    const dt = res.path[i * 4] - res.path[(i - 1) * 4];
+    if (dt < 1e-6) { speeds[i] = speeds[i - 1]; continue; }
     speeds[i] = Math.hypot(res.path[i * 4 + 1] - res.path[(i - 1) * 4 + 1], res.path[i * 4 + 2] - res.path[(i - 1) * 4 + 2], res.path[i * 4 + 3] - res.path[(i - 1) * 4 + 3]) / dt / KMS;
   }
   speeds[0] = speeds[1] || 0;
@@ -100,7 +108,7 @@ function recompute() {
   renderOutcome(); draw();
 }
 
-const visitsOf = () => res.events.filter(e => e.type === 'flyby' && e.dist <= REACH[e.body]);
+const visitsOf = () => visits(res);
 
 function renderOutcome() {
   const v = visitsOf(), out = $('outcome'), log = $('log');
@@ -108,6 +116,7 @@ function renderOutcome() {
   let text, cls = '';
   if (end.reason === 'impact') { text = `Crashed into ${NAME[end.body]} on ${fmtDate(end.t)}.`; cls = 'bad'; }
   else if (end.reason === 'sun') { text = `Fell into the Sun on ${fmtDate(end.t)}.`; cls = 'bad'; }
+  else if (end.reason === 'steps') { text = 'Stopped early: a tight orbit needed too many steps to follow.'; cls = 'bad'; }
   else if (end.reason === 'escaped') { text = `Left the planetary region (80 AU) on ${fmtDate(end.t)}.`; cls = v.length ? 'good' : ''; }
   else { text = `Still flying after ${(dur / 365.25).toFixed(0)} years.`; cls = v.length ? 'good' : ''; }
   out.textContent = text + (v.length ? ` ${v.length} planet flyby${v.length > 1 ? 's' : ''}.` : ' No planet flybys yet.'); out.className = 'outcome ' + cls;
@@ -145,6 +154,8 @@ function probeAt(t) {
 
 function draw() {
   if (!res || !W) return;
+  const label = state.playing ? 'Pause' : (state.cursor >= dur ? 'Replay' : 'Play');
+  if ($('play').textContent !== label) $('play').textContent = label;
   const cx = W / 2, cy = H / 2, S = Math.min(W, H) / 2 * 0.93 / Math.sqrt(33), T = state.t0 + state.cursor;
   const P = (x, y) => { const r = Math.hypot(x, y); if (r < 1e-9) return [cx, cy]; const f = Math.sqrt(r) * S / r; return [cx + x * f, cy - y * f]; };
   g.clearRect(0, 0, W, H);
@@ -152,7 +163,7 @@ function draw() {
   g.fillStyle = 'rgba(239,230,208,.35)';                      // a few fixed stars
   for (let i = 0; i < 90; i++) { const a = Math.sin(i * 91.7) * 43758.5, b = Math.sin(i * 12.9 + 4) * 24634.6; g.fillRect((a - Math.floor(a)) * W, (b - Math.floor(b)) * H, 1, 1); }
   g.lineWidth = 1;
-  ORBIT_A.forEach((a, i) => { g.strokeStyle = 'rgba(226,182,89,.13)'; g.beginPath(); g.arc(cx, cy, Math.sqrt(a) * S, 0, Math.PI * 2); g.stroke(); });
+  ORBIT_A.forEach(a => { g.strokeStyle = 'rgba(226,182,89,.13)'; g.beginPath(); g.arc(cx, cy, Math.sqrt(a) * S, 0, Math.PI * 2); g.stroke(); });
   const sun = g.createRadialGradient(cx, cy, 0, cx, cy, 16); sun.addColorStop(0, '#fff3c4'); sun.addColorStop(1, 'rgba(255,200,90,0)');
   g.fillStyle = sun; g.beginPath(); g.arc(cx, cy, 16, 0, Math.PI * 2); g.fill();
 
@@ -215,7 +226,7 @@ function blip(id) {
 }
 function tick(now) {
   if (!state.playing) return;
-  const dt = Math.min((now - last) / 1000, 0.1); last = now;
+  const dt = Math.max(0, Math.min((now - last) / 1000, 0.1)); last = now;
   const before = state.cursor;
   state.cursor = Math.min(dur, state.cursor + dt * (365.25 / 3) * state.rate);
   for (const e of visitsOf()) { const rt = e.t - state.t0; if (rt > before && rt <= state.cursor) blip(e.body); }
@@ -236,9 +247,10 @@ $('sound').addEventListener('click', () => { soundOn = !soundOn; $('sound').text
 const TARGETS = [['mars', 'Mars', 20000, 2, 'near'], ['venus', 'Venus', 20000, 2, 'near'], ['jupiter', 'Jupiter', 700000, 5, 'far'], ['saturn', 'Saturn', 100000, 8, 'far'], ['uranus', 'Uranus', 100000, 13, 'far'], ['neptune', 'Neptune', 60000, 20, 'far']];
 for (const t of TARGETS) { const o = el('option', t[1]); o.value = t[0]; $('target').append(o); }
 $('target').value = 'jupiter';
+const lock = on => document.querySelectorAll('#presets button, #launch input, #burns input, #burns button, #addBurn, #target, #aim').forEach(e => { e.disabled = on; });
 $('aim').addEventListener('click', async () => {
   const [id, name, radiusKm, years, kind] = TARGETS.find(t => t[0] === $('target').value), btn = $('aim'), status = $('aimStatus');
-  btn.disabled = true; status.textContent = `Searching for a way to ${name}...`;
+  lock(true); status.textContent = `Searching for a way to ${name}...`;
   try {
     const r = await autoAim(eph, state.t0, id, {
       radiusKm, days: 365.25 * years, burns: absBurns(),
@@ -248,7 +260,7 @@ $('aim').addEventListener('click', async () => {
     state.vinf = r.vinf; state.angle = r.angle; state.pitch = r.pitch; state.preset = null; state.cursor = 0;
     refreshers.forEach(f => f()); recompute();
     status.textContent = r.missKm < radiusKm * 3 ? `Aimed: passes ${name} at ${Math.round(r.missKm).toLocaleString('en-US')} km from its centre on ${fmtDate(r.t)}.` : `No good aim for this date. Closest found: ${Math.round(r.missKm).toLocaleString('en-US')} km from ${name}. Try another launch date.`;
-  } finally { btn.disabled = false; }
+  } catch { status.textContent = 'The search failed. Try different settings.'; } finally { lock(false); $('addBurn').disabled = state.burns.length >= 3; }
 });
 
 // ---------- keys, easter egg, boot ----------
