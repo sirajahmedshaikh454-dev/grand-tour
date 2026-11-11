@@ -42,10 +42,10 @@ const penalty = x => 1e3 * (['vinf', 'angle', 'pitch'].reduce((s, k, i) => s + M
 // Find a (speed, angle, pitch) that makes the probe pass `bodyId` at about `radiusKm` from its centre.
 // `grid` = [speeds, angles, pitches] each as [from, to, step]. Returns { vinf, angle, pitch, missKm, t }.
 export async function autoAim(eph, t0, bodyId, { radiusKm = null, days = 365 * 6, burns = [], grid = null, yieldFn = null, onProgress = null } = {}) {
-  const ib = indexOf(bodyId), planetKm = 1;   // radiusKm default is set below once we know the body
+  const ib = indexOf(bodyId);
   const target = (radiusKm ?? 0) / AU_KM;
   const run = x => simulate(eph, launchState(eph, t0, x[0], x[1], x[2]), { days, burns });
-  const cost = x => { const r = run(x); return Math.abs(r.minD[ib] - target) + penalty(x) + (r.end.reason === 'impact' && r.end.body === bodyId && !radiusKm ? 0 : 0); };
+  const cost = x => Math.abs(run(x).minD[ib] - target) + penalty(x);
   const g = grid ?? [[5, 13, 1], [-10, 30, 5], [-6, 8, 2]];
   let best = { f: Infinity, x: [8, 10, 0] };
   const total = (Math.floor((g[0][1] - g[0][0]) / g[0][2]) + 1) * (Math.floor((g[1][1] - g[1][0]) / g[1][2]) + 1) * (Math.floor((g[2][1] - g[2][0]) / g[2][2]) + 1);

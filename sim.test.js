@@ -18,7 +18,7 @@ test('the ephemeris puts the planets where they belong', () => {
 });
 
 test('interpolating between daily samples stays close to the exact library value', () => {
-  for (const [id, tol] of [['jupiter', 1e-6], ['earth', 1e-5], ['mercury', 3e-4]]) {
+  for (const [id, tol] of [['jupiter', 1e-7], ['saturn', 1e-7], ['mars', 1e-7], ['venus', 1e-6], ['earth', 1e-7], ['mercury', 5e-6]]) {   // measured: Mercury 181 km, Venus 32 km, the rest under 2 km
     const i = indexOf(id), got = [0, 0, 0];
     let worst = 0;
     for (const dt of [0.13, 0.5, 0.87, 100.37]) {
@@ -54,7 +54,7 @@ test('a launch leaves Earth at exactly the requested excess speed, and zero laun
 test('a fast outbound probe escapes the system and reports it; a slow one can fall into the Sun', () => {
   const t = dateToDays(new Date(Date.UTC(2005, 0, 1)));
   const fast = simulate(eph, launchState(eph, t, 14, 0), { days: 365 * 40 });
-  assert.ok(['escaped', 'time'].includes(fast.end.reason));
+  assert.equal(fast.end.reason, 'escaped');
   assert.ok(Math.hypot(...fast.final.p) > 25, 'far out after 40 years');
   const slow = simulate(eph, { t, p: [1, 0, 0], v: [0, 0.001, 0] }, { days: 400, planets: false });
   assert.equal(slow.end.reason, 'sun');
@@ -69,12 +69,10 @@ test('a planet flyby is detected, with a speed change and a periapsis that is no
     const r = simulate(eph, launchState(eph, t0, v, a), { days: 365 * 3 });
     if (!best || r.minD[ij] < best.d) best = { d: r.minD[ij], v, a, r };
   }
-  assert.ok(best.d < 0.5, 'some launch in the grid gets within 0.5 AU of Jupiter, got ' + best.d);
+  assert.ok(best.d < 0.15, 'a flat launch in the grid gets within 0.15 AU of Jupiter, got ' + best.d);
   const fb = best.r.events.find(e => e.type === 'flyby' && e.body === 'jupiter');
-  if (best.d < 0.15) {
-    assert.ok(fb, 'a flyby event was recorded');
-    assert.ok(fb.altKm > -1 && Math.abs(fb.dv) > 0.01);
-  }
+  assert.ok(fb, 'a flyby event was recorded');
+  assert.ok(fb.altKm > -1 && Math.abs(fb.dv) > 0.01);
 });
 
 test('a burn changes speed by what was asked, and is logged', () => {

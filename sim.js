@@ -16,6 +16,7 @@ export function earthState(eph, t) {
 // angleDeg turns the departure direction left (towards the outer planets) of Earth's own motion; 0 = straight ahead.
 // pitchDeg tilts it out of the ecliptic plane (positive = north), which the outer planets' tilted orbits need.
 export function launchState(eph, t, vinfKms, angleDeg, pitchDeg = 0) {
+  if (![t, vinfKms, angleDeg, pitchDeg].every(Number.isFinite) || vinfKms < 0) throw new RangeError('launchState needs finite numbers and a speed of at least 0');
   const e = earthState(eph, t), h = Math.hypot(e.v[0], e.v[1]);
   const ux = e.v[0] / h, uy = e.v[1] / h;
   const a = angleDeg * Math.PI / 180, c = Math.cos(a), s = Math.sin(a);
@@ -28,6 +29,7 @@ export const speedKms = v => Math.hypot(v[0], v[1], v[2]) / KMS;
 
 // burns: [{ t (absolute unix days), pro, norm }] in m/s; pro along the velocity, norm 90 degrees to its left.
 export function simulate(eph, start, o = {}) {
+  if (![start.t, ...start.p, ...start.v].every(Number.isFinite)) throw new RangeError('simulate needs a finite starting state');
   const tEnd = start.t + (o.days ?? 18262), rMax = o.rMax ?? 80, usePlanets = o.planets !== false;
   const burns = (o.burns ?? []).map(b => ({ ...b })).sort((a, b) => a.t - b.t);
   let bi = 0;
@@ -110,7 +112,8 @@ export function simulate(eph, start, o = {}) {
     if (r > rMax) { end = { reason: 'escaped', t, body: null }; break; }
   }
   for (let i = 0; i < N; i++) if (enc[i]) events.push(flyby(i, enc[i], speedKms(v)));
-  store(true);
+  if (t < tEnd - 1e-6 && end.reason === 'time') end = { reason: 'steps', t, body: null };   // the safety cap stopped the run early
+  if (t > lastStored) store(true);                                                      // no duplicate final point
   events.sort((a, b) => a.t - b.t);
   return { path: Float64Array.from(path), events, minD, minT, end, final: { t, p: p.slice(), v: v.slice() } };
 }
@@ -120,7 +123,10 @@ function flyby(i, e, vOut) {
   return { type: 'flyby', body: b.id, t: e.t, dist: e.minD, altKm: e.minD * AU_KM - b.radiusKm, vIn: e.vIn, vOut, dv: vOut - e.vIn };
 }
 
-// Which planets did this flight actually pass close to, in order. `reach` is how near counts as a visit.
-export function visits(result, reach = { mercury: 0.02, venus: 0.02, earth: 0.02, mars: 0.02, jupiter: 0.1, saturn: 0.1, uranus: 0.08, neptune: 0.08 }) {
+// How near counts as a "visit" to each planet (AU). The page and the tests both use this one table.
+export const REACH = { mercury: 0.02, venus: 0.02, earth: 0.02, mars: 0.02, jupiter: 0.1, saturn: 0.1, uranus: 0.08, neptune: 0.08 };
+
+// Which planets did this flight actually pass close to, in order.
+export function visits(result, reach = REACH) {
   return result.events.filter(e => e.type === 'flyby' && e.dist <= reach[e.body]);
 }

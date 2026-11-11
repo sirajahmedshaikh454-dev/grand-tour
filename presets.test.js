@@ -29,7 +29,7 @@ test('Jupiter-then-Saturn: a gravity assist roughly doubles the speed and aims a
   assert.ok(j.t < s.t, 'Jupiter first');
   assert.ok(j.vOut - j.vIn > 8, 'Jupiter adds more than 8 km/s: ' + (j.vOut - j.vIn));
   assert.ok(s.dist * AU_KM > 80000 && s.dist * AU_KM < 150000, 'Saturn passed 80,000-150,000 km from centre (Voyager 2: about 101,000)');
-  assert.ok(Math.hypot(...[28.06, 1.36]) < 30, 'the nudge is under 30 m/s');
+  assert.ok(preset('voyager-saturn').burns.every(b => Math.hypot(b.pro, b.norm) < 30), 'the nudge is under 30 m/s');
   assert.ok(Math.abs(s.t - day('1981-08-26')) < 200, 'Saturn within 200 days of the real encounter');
 });
 
