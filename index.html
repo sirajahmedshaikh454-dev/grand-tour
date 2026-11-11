@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:">
+<title>Grand Tour</title>
+<meta name="description" content="Aim a space probe through the real planets of any date. Gravity assists, Voyager 2, and a challenge nobody has finished.">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <h1>Grand <em>Tour</em></h1>
+  <p class="tag">Aim a probe through the real solar system of any date. Let the giants fling you outward.</p>
+</header>
+
+<main class="layout">
+  <section class="stage" aria-label="Map of the solar system">
+    <canvas id="map" role="img" aria-label="Top-down map of the solar system with the planned probe path"></canvas>
+    <div class="hud" aria-live="polite">
+      <div id="clock" class="clock">-</div>
+      <div id="vitals" class="vitals">-</div>
+    </div>
+    <p class="scale-note">Distance from the Sun is drawn on a square-root scale so Earth and Neptune fit together.</p>
+    <p class="egg" id="egg" hidden></p>
+    <div class="playbar">
+      <button id="play" type="button">Play</button>
+      <input id="scrub" type="range" min="0" max="1" step="1" value="0" aria-label="Mission time">
+      <label class="rate">Speed
+        <select id="rate"><option value="0.5">0.5x</option><option value="1" selected>1x</option><option value="3">3x</option><option value="8">8x</option></select>
+      </label>
+      <button id="sound" type="button" aria-pressed="true">Sound on</button>
+    </div>
+    <div id="loading" class="loading">Computing the planets...</div>
+  </section>
+
+  <aside class="console" aria-label="Mission console">
+    <section>
+      <h2>Missions</h2>
+      <div id="presets" class="presets"></div>
+      <p id="blurb" class="blurb"></p>
+    </section>
+
+    <section>
+      <h2>Launch</h2>
+      <div id="launch" class="fields"></div>
+    </section>
+
+    <section>
+      <h2>Corrections <small id="dvTotal"></small></h2>
+      <div id="burns" class="burns"></div>
+      <button id="addBurn" type="button" class="ghost">+ Add a correction burn</button>
+    </section>
+
+    <section>
+      <h2>Auto-aim</h2>
+      <div class="aimrow">
+        <label>Pass close to
+          <select id="target"></select>
+        </label>
+        <button id="aim" type="button">Aim for me</button>
+      </div>
+      <p id="aimStatus" class="small" role="status"></p>
+    </section>
+
+    <section>
+      <h2>Flight log</h2>
+      <p id="outcome" class="outcome" role="status"></p>
+      <ol id="log" class="log"></ol>
+    </section>
+
+    <section>
+      <h2>The Grand Tour</h2>
+      <div id="giants" class="giants"></div>
+      <p class="small">Pass within reach of Jupiter, Saturn, Uranus and Neptune on one flight. Voyager 2 did, in 1977, because the four planets lined up once in 176 years.</p>
+    </section>
+  </aside>
+</main>
+
+<footer class="foot">
+  <p>Planet positions: <a href="https://github.com/cosinekitty/astronomy">astronomy-engine</a> (MIT). Physics: Sun and eight planets as point masses, velocity-Verlet. Not navigation-grade.</p>
+</footer>
+
+<script src="vendor/astronomy.browser.min.js"></script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
